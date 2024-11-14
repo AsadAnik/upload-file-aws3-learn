@@ -1,0 +1,1 @@
+export { multerErrorHandler } from "./error.middleware";
