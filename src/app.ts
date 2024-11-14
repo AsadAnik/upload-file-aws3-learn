@@ -1,4 +1,5 @@
 import express, { Application, Request, Response, NextFunction } from "express";
+import morgan from "morgan";
 import { userRoute } from "./routes";
 import { multerErrorHandler } from "./middlewares";
 
@@ -7,6 +8,7 @@ const app: Application = express();
 // Common Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(morgan("dev"));
 
 // Routes
 app.use("/user", userRoute);
