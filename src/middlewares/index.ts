@@ -1,1 +1,1 @@
-export { multerErrorHandler } from "./error.middleware";
+export { multerErrorHandler, globalErrorHandler } from "./error.middleware";

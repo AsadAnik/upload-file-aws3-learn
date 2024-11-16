@@ -31,3 +31,17 @@ export const multerErrorHandler = (
 
     next(error);
 };
+
+/**
+ * @desc Global error handler
+ * @param error 
+ * @param req 
+ * @param res 
+ * @param next 
+ */
+export const globalErrorHandler = (error: any, _req: Request, res: Response, _next: NextFunction) => {
+    res.status(error.statusCode || 500).json({
+        message: error.message || "Internal Server Error",
+    });
+};
+

@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 
 class UserController {
     /**
@@ -6,7 +6,7 @@ class UserController {
      * @desc Upload a file
      * @access Public
      */
-    public uploadFile(req: Request, res: Response): void {
+    public uploadFile(req: Request, res: Response, next: NextFunction): void {
        try {
             // req.file is the file that was uploaded
             console.log("REQ OBJECT HERE - ", req.file);
@@ -14,10 +14,8 @@ class UserController {
                 message: "File Uploaded",
                 file: req.file,
             });
-        } catch (error: any) {
-            res.status(error.statusCode || 500).json({
-                message: error.message || "Internal Server Error",
-            });
+        } catch (error) {
+           next(error);
         }
     }
 }
