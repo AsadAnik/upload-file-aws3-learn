@@ -1,0 +1,1 @@
+export { default as s3Uploader } from './s3bucket';

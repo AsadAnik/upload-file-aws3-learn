@@ -1,6 +1,4 @@
-# Advanced Upload File System & AWS-S3
-
-[Lecture - 132 | NodeJS File Uploads | Full-stack Army](https://youtu.be/Il3c37lRQDM?si=wWabmGWOuQ2SNcVy)
+# File Upload & AWS-S3 Bucket Storage
 
 ⇒ Multer Package to using with Node
 
@@ -72,7 +70,7 @@ Now using the Multer middleware into the route to getting the file for req objec
 
 Also file is uploaded into the `uploads` directory into the project.
 
-![Screenshot 2024-11-14 at 12.22.55 PM.png](https://prod-files-secure.s3.us-west-2.amazonaws.com/e049a259-c8a0-4a67-b4af-2de23d3296ef/49063f74-d8aa-43c9-85c0-78ec4446bc21/Screenshot_2024-11-14_at_12.22.55_PM.png)
+![readme_assets 1.png](readme_assets/1.png)
 
 <aside>
 💡
@@ -111,6 +109,9 @@ Firstly, we have our server / application file of Express server with TypeScript
     
     // Error Handling Middleware
     app.use(multerErrorHandler);
+    
+    // Global Error Handler
+    app.use(globalErrorHandler);
     
     const PORT: number = Number(process.env.PORT) || 3000;
     const HOST: string = process.env.HOST || "localhost";
@@ -174,6 +175,19 @@ Firstly, we have our server / application file of Express server with TypeScript
     
         next(error);
     };
+    
+    /**
+     * @desc Global error handler
+     * @param error 
+     * @param req 
+     * @param res 
+     * @param next 
+     */
+    export const globalErrorHandler = (error: any, _req: Request, res: Response, _next: NextFunction) => {
+        res.status(error.statusCode || 500).json({
+            message: error.message || "Internal Server Error",
+        });
+    };
     ```
     
 
@@ -208,7 +222,7 @@ There is no any extra business logics, therefore we used only Controller to mana
 - **`my-app/src/controllers/user.controller.ts`**
     
     ```tsx
-    import { Request, Response } from "express";
+    import { Request, Response, NextFunction } from "express";
     
     class UserController {
         /**
@@ -216,7 +230,7 @@ There is no any extra business logics, therefore we used only Controller to mana
          * @desc Upload a file
          * @access Public
          */
-        public uploadFile(req: Request, res: Response): void {
+        public uploadFile(req: Request, res: Response, next: NextFunction): void {
            try {
                 // req.file is the file that was uploaded
                 console.log("REQ OBJECT HERE - ", req.file);
@@ -225,9 +239,7 @@ There is no any extra business logics, therefore we used only Controller to mana
                     file: req.file,
                 });
             } catch (error: any) {
-                res.status(error.statusCode || 500).json({
-                    message: error.message || "Internal Server Error",
-                });
+               next(error);
             }
         }
     }
@@ -289,6 +301,8 @@ We are going to use the advance options for Multer configurations with. And here
 Its filters only the image like `png` , `jpeg` and `jpg` formats. Any other format will not be supporting by doing the filter thing. Also added the size limit for each of the files, this will be 5MB of size only supports limit.
 
 </aside>
+
+### Upload files with using Storages
 
 **Storage adding:** We can adding memory for file uploading through storage. And there is 2 types of storage engines like `DiskStorage` and `MemoryStorage`.
 
@@ -389,3 +403,625 @@ For a balanced approach:
 2. Use `diskStorage` for **large files** and then offload them to cloud storage or a CDN.
 
 Let me know if you need help setting up a specific use case!
+
+### Multiple files uploading system
+
+We are going to see how can we upload files by using both Disk / Memory storage using.
+
+**`diskStorage` for multiple files uploading**
+
+Files are stored directly on disk.
+
+- **`my-app/src/routes/user.route.ts`**
+    
+    ```tsx
+    import { Router } from "express";
+    import { upload } from "../lib";
+    import { UserController } from "../controllers";
+    const router: Router = Router();
+    
+    // Initialize the controller
+    const userController: UserController = new UserController();
+    
+    /**
+     * @route POST /upload-multiple
+     * @desc Upload multiple files
+     * @access Public
+     */
+    router.post("/upload-multiple", upload.array("files", 5), userController.uploadFile);
+    
+    export default router;
+    ```
+    
+
+Now let’s see the configuration how will be looks like with some file filtering feature of Multer.
+
+- **`my-app/src/lib/multer.ts`**
+    
+    ```tsx
+    import multer from "multer";
+    
+    const storage = multer.diskStorage({
+    	destination: (req, file, cb) => {
+    		cb(null, './uploads'); // Directory to save files
+    	},
+    	filename: (req, file, cb) => {
+    		cb(null, `${Date.now()}-${file.originalname}`); // Custom file name
+    	},
+    });
+    
+    const upload = multer({ storage });
+    
+    export default upload;
+    ```
+    
+    And, if we are using with some more options like files filtering according to the file types. It will provide us the power of choosing which types of files only we are going to allow here.
+    
+    ```tsx
+    import multer from 'multer';
+    
+    const storage = multer.diskStorage({
+    	destination: (_req, _file, cb) => {
+    		cb(null, './uploads');
+    	},
+    	filename: (_req, file, cb) => {
+    		cb(null, `${Date.now()}-${file.originalname}`);
+    	},
+    });
+    
+    // File Filtering Function Here..
+    const fileFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    	// Allowed files types..
+    	const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+    	
+    	if (allowedMimeTypes.includes(file.mimetype)) {
+    		cb(null, true);
+    	} else {
+    		cb(new Error(`Invalid file type: ${file.mimetype} here.`)); // Reject file
+    	}
+    };
+    
+    // Using the File Filtering..
+    const upload = multer({ 
+    	storage,
+    	fileFilter,
+    	limits: { files: 5, fileSize: 5 * 1024 * 1024 } // Maximum 5 filess, 5MB per file
+    });
+    
+    export default upload;
+    ```
+    
+    <aside>
+    💡
+    
+    Option added for filtering the file before uploading with Multer and added a file size limit and files uploading limits.
+    
+    </aside>
+    
+
+Controller decide how to show them to end user 😜. For now we are just see how the response comes with our multiple files uploading.
+
+- **`my-app/src/controllers/user.controller.ts`**
+    
+    ```tsx
+    import { Request, Response, NextFunction } from "express";
+    
+    class UserController {
+        /**
+         * @route POST /upload-multiple
+         * @desc Upload a file
+         * @access Public
+         */
+        public uploadFiles(req: Request, res: Response, next: NextFunction): void {
+           try {
+    		       if (!req.files || req.files.length === 0) {
+    			       throw new Error('No files uploaded or file type not allowed.')
+    		       }
+    		       
+    		       // Access the uploaded files here..
+    		       const files = req.files as Express.Multer.File[];
+    		       const fileDetails = files.map(file => {
+    			       return {
+    				       originalName: file.originalname,
+    				       path: file.path,
+    				       size: file.size,
+    				       mimeType: file.mimetype,
+    				       serverDestination: file.destination,
+    			       };
+    		       });
+    		       
+    		       console.log('Uploaded files: ', fileDetails);
+         
+               res.status(200).json({
+                   message: "Files uploaded successfully!",
+                   files: fileDetails,
+               });
+            } catch (error: any) {
+                next(error);
+            }
+        }
+    }
+    
+    export default UserController;
+    ```
+    
+
+**⇒ Server Terminal (Bash) Console**
+
+The console logs for Request and Response of the API
+
+![readme_assets 2.png](readme_assets/2.png)
+
+**⇒ Postman API Response**
+
+Result of uploading multiple images as our API response here.
+
+![readme_assets 3.png](readme_assets/3.png)
+
+ **`memoryStorage` for multiple files uploading**
+
+Files are stored in memory as buffers.
+
+Now let’s see the configuration how will be looks like with some file filtering feature of Multer.
+
+- **`my-app/src/lib/multer.ts`**
+    
+    We are using with some more options like files filtering according to the file types. It will provide us the power of choosing which types of files only we are going to allow here.
+    
+    ```tsx
+    import multer from 'multer';
+    
+    // Memory storage configuration
+    const storage = multer.memoryStorage();
+    
+    // File filter function
+    const fileFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+      // Allowed file types
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+    
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true); // Accept the file
+      } else {
+        cb(new Error(`Invalid file type: ${file.mimetype} here.`)); // Reject the file
+      }
+    };
+    
+    // Multer configuration with memoryStorage and file filter
+    const upload = multer({
+      storage,
+      fileFilter,
+      limits: {
+        files: 5, // Maximum 5 files
+        fileSize: 5 * 1024 * 1024, // Maximum 5MB per file
+      },
+    });
+    
+    export default upload;
+    ```
+    
+    <aside>
+    💡
+    
+    Option added for filtering the file before uploading with Multer and added a file size limit and files uploading limits.
+    
+    </aside>
+    
+
+When we see into this controller this is slightly different from diskStorage controller. Basically in memoryStorage we are getting the file as buffers. Therefore, we are using the `file.buffer` as this is here only and its the temporary data which is stored into the RAM.
+
+- **`my-app/src/controllers/user.controller.ts`**
+    
+    ```tsx
+    import { Request, Response, NextFunction } from "express";
+    
+    class UserController {
+      /**
+       * @route POST /upload-multiple
+       * @desc Upload multiple files (stored in memory)
+       * @access Public
+       */
+      public uploadFiles(req: Request, res: Response, next: NextFunction): void {
+        try {
+          if (!req.files || (req.files as Express.Multer.File[]).length === 0) {
+            throw new Error("No files uploaded or file type not allowed.");
+          }
+    
+          // Access the uploaded files (stored in memory)
+          const files = req.files as Express.Multer.File[];
+          const fileDetails = files.map((file) => {
+            return {
+              originalName: file.originalname,
+              size: file.size,
+              mimeType: file.mimetype,
+              buffer: file.buffer, // File data stored as Buffer
+            };
+          });
+    
+          console.log("Uploaded files: ", fileDetails);
+    
+          res.status(200).json({
+            message: "Files uploaded successfully!",
+            files: fileDetails,
+          });
+        } catch (error: any) {
+          next(error);
+        }
+      }
+    }
+    
+    export default UserController;
+    ```
+    
+    <aside>
+    💡
+    
+    As we can see the file buffer we can access as for memory storage saved. This buffer data is directly came from RAM which is temporary data. If any crashes happens then it will be lost immediately. This is good to do something immediate action with the files.
+    
+    </aside>
+    
+
+**⇒ Server Terminal (Bash) Console**
+
+The console logs for Request and Response of the API
+
+![readme_assets 4.png](readme_assets/4.png)
+
+**⇒ Postman API Response**
+
+Result of uploading multiple images as our API response here.
+
+![readme_assets 5.png](readme_assets/5.png)
+
+### Multi fields file uploading system
+
+In the multi-fields file we are basically uploads the multiple form fields as multiple files. And we can take control each of the files and decide the specific filtering and specific actions.
+
+So, we can do with an example of uploading one image file with maximum 5 pdf files. And here always use `multer.fields()` to handle multiple fields.
+
+- `profilePic` accepts 1 file (Profile Image).
+- `documents` accepts up to 5 files (PDF or text files).
+
+<aside>
+💡
+
+We can use any storage system for this one. The configuration of the Multer will be same as like before. Then only the changes we are going to looking forward here.
+
+</aside>
+
+- **`my-app/src/routes/user.route.ts`**
+    
+    ```tsx
+    import { Router } from "express";
+    import { upload } from "../lib";
+    import { UserController } from "../controllers";
+    const router: Router = Router();
+    
+    // Initialize the controller
+    const userController: UserController = new UserController();
+    
+    /**
+     * @route POST /upload-multiple
+     * @desc Upload multiple files
+     * @access Public
+     */
+    router.post("/upload-fields", upload.fields([
+        { name: 'profilePic', maxCount: 1 },
+        { name: 'documents', maxCount: 5 },
+    ]), userController.uploadFile);
+    
+    export default router;
+    ```
+    
+- **`my-app/src/controllers/user.controller.ts`**
+    
+    ```tsx
+    import { Request, Response, NextFunction } from 'express';
+    
+    class UserController {
+    	  /**
+         * @route POST /upload-multi-fields
+         * @desc Upload files to multiple fields
+         * @access Public
+         */
+        public uploadMultiFields(req: Request, res: Response, next: NextFunction): void {
+            try {
+                const files = req.files as {
+                    [fieldname: string]: Express.Multer.File[];
+                };
+                const profilePic = files['profilePic']?.[0]; // Single File
+                const documents = files['documents'] || []; // Array of Files
+    
+                console.log('REQUEST FILES DATA: ', req.files);
+    
+                // Access files for `profilePic`
+                const profilePicDetails = profilePic ? {
+                    originalName: profilePic.originalname,
+                    size: profilePic.size,
+                    mimeType: profilePic.mimetype,
+                    buffer: profilePic.buffer, // File data in memory
+                }
+    		            : null;
+    
+                // Access files for `documents`
+                const documentDetails = documents.map((doc) => ({
+                    originalName: doc.originalname,
+                    size: doc.size,
+                    mimeType: doc.mimetype,
+                    buffer: doc.buffer,
+                }));
+    
+                res.status(200).json({
+                    message: 'Files uploaded successfully!',
+                    profilePic: profilePicDetails,
+                    documents: documentDetails,
+                });
+            } catch (error: any) {
+                next(error);
+            }
+        }
+    }
+    
+    export default UserController;
+    ```
+    
+
+**⇒ Server Terminal (Bash) Console**
+
+The console logs for Request and Response of the API
+
+![readme_assets 6.png](readme_assets/6.png)
+
+**⇒ Postman API Response**
+
+Result of uploading multiple images as our API response here.
+
+![readme_assets 7.png](readme_assets/7.png)
+
+## Cloud storage upload (AWS-S3 Bucket)
+
+We are using the cloud system to keeping data inside third party service. The service that will take care of our files and storage managements. 
+
+**⇒ AWS SDK for Node (JavaScript/TypeScript) Applications**
+
+**v2** Developers Guide Here:
+
+[Getting Started in Node.js - AWS SDK for JavaScript](https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/getting-started-nodejs.html)
+
+**v3** Developers Guide Here:
+
+[Get started with Node.js - AWS SDK for JavaScript](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/getting-started-nodejs.html)
+
+**⇒ Complete Guide for AWS SDK JavaScript**
+
+[docs.aws.amazon.com](https://docs.aws.amazon.com/pdfs/sdk-for-javascript/v3/developer-guide/js-sdk-dg.pdf#getting-started-nodejs)
+
+**Using with Linode**
+
+Linode Object Storage is an S3-compatible service offering a cost-effective, beginner-friendly alternative to AWS S3. The steps for interacting with it are the same as AWS S3 because Linode adheres to the same API standards.
+
+**Advantages of Using `Linode`**
+
+1. **Familiarity with AWS SDK**: You still use the same tools and codebase as AWS S3.
+2. **Cost Efficiency**: Great for learning without incurring high AWS costs.
+3. **Scalability**: Linode Object Storage is reliable and can scale as your needs grow.
+
+**⇒ NPM Package for Installing AWS-SDK**
+
+[npm: aws-sdk](https://www.npmjs.com/package/aws-sdk)
+
+**Start with Linode and Node (TypeScript) Application**
+
+Here we showed AWS SDK v2 and v3 both. You have to use only one of them not both of them. We preferred to using v3 SDK. 
+
+- 1. **Create a Linode Account**
+    1. Visit [Linode's Website](https://www.linode.com/).
+    2. Sign up for a free account (you might get free credits for starting).
+    3. Verify your email address.
+
+---
+
+- 2. **Set Up an Object Storage Bucket**
+    1. Log in to the Linode Cloud Manager.
+    2. Go to **Object Storage** in the sidebar.
+    3. Click **Create a Bucket**.
+        - Choose a **bucket name** (e.g., `my-bucket`).
+        - Select a **region** (e.g., `us-east-1`).
+        - Click **Create Bucket**.
+    4. Your bucket is ready!
+
+---
+
+- 3. **Generate API Keys**
+    1. Go to **API Tokens** in the sidebar.
+    2. Click **Create a Personal Access Token**.
+        - Give it a name (e.g., `S3 Access`).
+        - Set **Object Storage Read/Write** permissions.
+    3. Save the **Access Key** and **Secret Key**—you’ll use these later.
+
+---
+
+- 4. **Install AWS SDK v2**
+    
+    To interact with Linode Object Storage, install the AWS SDK for JavaScript.
+    
+    —> **`npm install aws-sdk`** 
+    
+    —> `npm install --save-dev @types/aws-sdk` (If using with **TypeScript**)
+    
+
+---
+
+- 4. **Install AWS SDK v3**
+    
+    To interact with Linode Object Storage, install the AWS SDK for JavaScript.
+    
+    —> **`npm install @aws-sdk/client-s3`** 
+    
+
+Simple configuration here about S3 Bucket configure by using with `Linode`. Linode is using to make the process easier to interacting with AWS services.
+
+- **`my-app/src/lib/s3bucket.ts`**
+    
+    **→ v2** AWS SDK for S3
+    
+    ```tsx
+    import S3 from 'aws-sdk/clients/s3';
+    
+    const s3Bucket = new S3({
+    	accessKeyId: process.env.ACCESS_KEY,
+    	secretAccessKey: process.env.SECRET_KEY,
+    	region: process.env.REGION,
+    	endpoint: process.env.ENDPOINT,
+    	s3ForcePathStyle: true,
+    });
+    
+    /**
+     * UPLOADER OF S3 BUCKET
+     * @param {Buffer | String} file
+     * @param {String} fileName 
+     * @returns 
+     */
+    const s3Uploader = async(file: Buffer | string, fileName: string) => {
+       const bucketName = process.env.BUCKET_NAME;
+    
+        if (!bucketName) {
+            throw new Error('S3 Bucket name is not defined in the env.');
+        }
+    
+    		const params = {
+    			Bucket: bucketName,
+    			Key: fileName,
+    			Body: file,
+    			ACL: "public-read",
+    		};
+    	
+    		try {
+    			const uploadResult = await s3Bucket.upload(params).promise();
+    			console.log('File uploaded successfully: ', uploadResult.Location);
+    			return uploadResult.Location; // Return the file URL
+    	
+    		} catch(error) {
+    			console.error(`Error uploading to s3: ${error}`);
+    			throw new Error('Failed to upload file to s3');
+    		}
+    };
+    
+    export default s3Uploader;
+    ```
+    
+    → **v3** AWS SDK for S3
+    
+    ```tsx
+    import { S3Client, PutObjectCommand, ObjectCannedACL } from '@aws-sdk/client-s3';
+    
+    const s3Client = new S3Client({
+        region: process.env.REGION as string,
+        endpoint: process.env.ENDPOINT as string,
+        credentials: {
+            accessKeyId: process.env.ACCESS_KEY as string,
+            secretAccessKey: process.env.SECRET_KEY as string,
+        },
+    });
+    
+    /**
+     * UPLOADER OF S3 BUCKET
+     * @param {Buffer | String} file
+     * @param {String} fileName 
+     * @returns 
+     */
+    const s3Uploader = async (file: Buffer | string, fileName: string): Promise<string> => {
+        const bucketName = process.env.BUCKET_NAME;
+        
+        if (!bucketName) {
+    	    throw new Error('S3 Bucket name is not defined in the env.');
+        }
+        
+        const params = {
+            Bucket: bucketName,
+            Key: fileName, // Use fileName as the key
+            Body: file,
+            ACL: "public-read" as ObjectCannedACL,
+        };
+        
+        try {
+    	    const command = new PutObjectCommand(params);
+    	    await s3Client.send(command);
+    	    
+    	    const publicURL: string = `${process.env.ENDPOINT}${bucketName}/${fileName}`;
+    	    console.log(`File Uploaded Successfully: ${publicURL}`);
+    	    return publicURL; // Return the file URL
+        
+        } catch (error) {
+    	    console.error(`Error uploading to s3: ${error}`);
+    		throw new Error('Failed to upload file to s3');
+        }
+    };
+    
+    export default s3Uploader;
+    ```
+    
+    <aside>
+    💡
+    
+    We are gathering the `ACCESS_KEY`, `SECRET_KEY`, `REGION`, `ENDPOINT` all the secret things from Linode after creating Bucket on there.
+    
+    **NOTE:**  We also can import like this way `import AWS from 'aws-sdk';`  and then saying the constructor method like this `new AWS.S3();` . But this is not the optimized way if we are only using the S3 Bucket only from entire AWS services. That’s why we are imported with this way `import S3 from 'aws-sdk/clients/s3';` which reduces to importing entire AWS services and keeps import only one service at a time, and this is convenient way.
+    
+    </aside>
+    
+
+So that time we don’t need any storage for file uploading into the file storage system. Instead of that we are using the cloud storage s3 to taking care our file.
+
+Now let’s using the AWS uploader for uploading our files from multer.
+
+- **`my-app/src/controller/user.controller.ts`**
+    
+    ```tsx
+    import { Request, Response, NextFunction } from 'express';
+    import { aws } from '../lib';
+    
+    class UserController {
+        /**
+         * @route POST /upload-cloud
+         * @desc Upload file to cloud
+         * @param req 
+         * @param res 
+         * @param next 
+         */
+        public async uploadToCloud(req: Request, res: Response, next: NextFunction): Promise<void> {
+            try {
+                if (!req.file) {
+                   throw new Error('No File Provided!');
+                }
+    
+                const file = req.file.buffer; // Assuming multer memory storage
+                const fileName = `${Date.now()}-${req.file.originalname}`;
+    
+                // Upload the file to S3
+                const fileUrl = await aws.s3Uploader(file, fileName);
+    
+                res.status(200).json({
+                    message: 'File uploaded successfully',
+                    fileUrl,
+                });
+    
+            } catch (error: any) {
+                next(error);
+            }
+        }
+    }
+    
+    export default UserController;
+    ```
+    
+    <aside>
+    💡
+    
+    `Response after uploading file to S3 Bucket.`
+    
+    {
+        "message": "File uploaded successfully",
+        "fileUrl": "https://<endpoint>/<bucket_name>/<file_name>"
+    }
+    
+    </aside>
